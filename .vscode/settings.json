@@ -5,6 +5,8 @@
     "string": "cpp",
     "unordered_map": "cpp",
     "string_view": "cpp",
-    "initializer_list": "cpp"
+    "initializer_list": "cpp",
+    "state_button.h": "c",
+    "queue.h": "c"
   }
 }

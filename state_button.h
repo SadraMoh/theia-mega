@@ -1,9 +1,9 @@
 #ifndef STATE_BUTTON_H
 #define STATE_BUTTON_H
 
-const unsigned long DEBOUNCE = 50; // global debounce delay
+const unsigned long DEBOUNCE = 24; // global debounce delay
 
-typedef void (*callback)(struct StateButton *p);
+typedef void (*buttonCallback)(struct StateButton *p);
 
 struct StateButton
 {
@@ -13,7 +13,7 @@ struct StateButton
   int last_reading;
   int state;
   unsigned int counter;
-  callback method; // Called
+  buttonCallback method; // Called
 };
 
 void state_button_check(StateButton *self)
@@ -34,6 +34,10 @@ void state_button_check(StateButton *self)
       self->counter = self->counter + 1;
 
       self->method(self);
+
+      Serial.print(F("[EVENT] "));
+      Serial.print(self->PIN);
+      Serial.println();
     }
 
     self->state = self->reading;

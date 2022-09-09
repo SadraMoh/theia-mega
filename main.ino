@@ -1,3 +1,4 @@
+#pragma region definitions
 
 #define OSX 0
 #define WINDOWS 1
@@ -6,11 +7,17 @@
 int platform = UBUNTU;
 
 #include "Keyboard.h"
-
 #include <LiquidCrystal_I2C.h>
+
 const LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 #include "state_button.h"
+#include "queue.h"
+
+#define MOTOR_SPEED 120
+
+// to prevent damage to the engine
+#define MOTOR_SAFETY_DELAY 200
 
 // order
 #define RTL 0
@@ -29,6 +36,75 @@ const LiquidCrystal_I2C lcd(0x27, 16, 4);
 #define PEDAL 4
 #define CALIB 6
 
+unsigned short BUZZER = 4U;
+unsigned short SCAN_LED = 13U;
+
+unsigned short CRADLE_OPEN_SENSOR = 12;  // BLUE
+unsigned short CRADLE_CLOSE_SENSOR = 11; // GREEN
+unsigned short CRADLE_OPEN_MOTOR = 10;   // PINK
+unsigned short CRADLE_CLOSE_MOTOR = 9;   // WHITE
+
+unsigned short GLASS_UP_SENSOR = 7;
+unsigned short GLASS_DOWN_SENSOR = 8;
+unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
+unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
+
+bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
+
+void nothing(){};
+
+void test(StateButton *self);
+
+void switch_ord(StateButton *self);
+void switch_led_side(StateButton *self);
+void switch_mode(StateButton *self);
+
+void handle_scan_button(StateButton *self);
+
+void handle_glass_down_sensor(StateButton *self);
+void handle_glass_up_sensor(StateButton *self);
+
+void open_cradle(StateButton *self);
+
+void close_cradle(StateButton *self);
+void handle_cradle_open_sensor(StateButton *self);
+void handle_cradle_close_sensor(StateButton *self);
+
+void handle_pedal(StateButton *self);
+
+// attempts to spin the glass up
+// does nothing if the up sensor won't allow it
+void spin_glass_up()
+{
+  if (digitalRead(GLASS_UP_SENSOR) == HIGH)
+    analogWrite(GLASS_MOTOR_UP, MOTOR_SPEED);
+}
+
+// attempts to spin the glass down
+// does nothing if the down sensor won't allow it
+void spin_glass_down()
+{
+  if (digitalRead(GLASS_DOWN_SENSOR) == HIGH)
+    analogWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED);
+}
+
+struct StateButton stateButtons[] = {
+    {4U, 0U, 0, 0, 0, 0U, nothing},                     // 0  Buzzer
+    {13U, 0U, 0, 0, 0, 0U, switch_led_side},            // 1  LED Mode
+    {A0, 0U, 0, 0, 0, 0U, open_cradle},                 // 2  Cradle Open Button
+    {A1, 0U, 0, 0, 0, 0U, close_cradle},                // 3  Cradle Close Button
+    {A2, 0U, 0, 0, 0, 0U, handle_pedal},                // 4  Pedal
+    {A3, 0U, 0, 0, 0, 0U, switch_ord},                  // 5  Scan Order Selector
+    {A4, 0U, 0, 0, 0, 0U, switch_mode},                 // 6  Scan Mode & Calibration
+    {A5, 0U, 0, 0, 0, 0U, handle_scan_button},          // 7  Scan
+    {8U, 0U, 0, 1, 1, 0U, handle_glass_down_sensor},    // 8  Glass Down Sensor
+    {7U, 0U, 0, 1, 1, 0U, handle_glass_up_sensor},      // 9  Glass Up Sensor
+    {12U, 0U, 0, 1, 1, 0U, handle_cradle_open_sensor},  // 10 Cradle Open Sensor  (BLUE)
+    {11U, 0U, 0, 1, 1, 0U, handle_cradle_close_sensor}, // 11 Cradle Clsoe Sensor (GREEN)
+};
+
+#pragma endregion definitions
+
 void test(StateButton *self)
 {
   lcd.clear();
@@ -36,6 +112,20 @@ void test(StateButton *self)
   sprintf(str, "%d", self->counter);
   lcd.print(str);
 }
+
+int count = 0;
+
+void countup()
+{
+  lcd.clear();
+
+  char str[4];
+  sprintf(str, "%d", count++);
+  lcd.setCursor(0, 0);
+  lcd.print(str);
+}
+
+// order
 
 void switch_ord(StateButton *self)
 {
@@ -60,33 +150,6 @@ void switch_mode(StateButton *self)
 
   printSettings();
 }
-
-void nothing(){};
-
-void scan(StateButton *self);
-void handle_glass_down(StateButton *self);
-
-unsigned short CRADLE_OPEN_SENSOR = 12;
-unsigned short CRADLE_CLOSE_SENSOR = 11;
-unsigned short CRADLE_OPEN_MOTOR = 10;
-unsigned short CRADLE_CLOSE_MOTOR = 9;
-
-unsigned short GLASS_DOWN_SENSOR = 8;
-unsigned short GLASS_UP_SENSOR = 7;
-unsigned short GLASS_MOTOR_UP = 6;
-unsigned short GLASS_MOTOR_DOWN = 5;
-
-struct StateButton stateButtons[] = {
-    {04U, 0U, 0, 0, 0, 0U, nothing},          // 0 TEST
-    {13U, 0U, 0, 0, 0, 0U, switch_led_side},  // 1 LED Mode
-    {A0, 0U, 0, 1, 1, 0U, test},              // 2 Cradle Open
-    {A1, 0U, 0, 0, 0, 0U, nothing},           // 3 Cradle Close
-    {A2, 0U, 0, 0, 0, 0U, nothing},           // 4 Pedal
-    {A3, 0U, 0, 0, 0, 0U, switch_ord},        // 5 Scan Order Selector
-    {A4, 0U, 0, 0, 0, 0U, switch_mode},       // 6 Scan Mode & Calibration
-    {A5, 0U, 0, 0, 0, 0U, scan},              // 7 Scan
-    {8U, 0U, 0, 1, 1, 0U, handle_glass_down}, // 8 Glass down Sensor
-};
 
 // send scan command according to scan mode
 void send_scan_cmd()
@@ -121,66 +184,184 @@ void send_scan_cmd()
   }
 }
 
-void scan(StateButton *self)
+void handle_scan_button(StateButton *self)
 {
   if (stateButtons[7].counter % 2 == 1)
     return;
 
-  if (stateButtons[6].counter == PANEL || stateButtons[6].counter == PEDAL)
+  switch (stateButtons[6].counter)
   {
+  case PEDAL:
     send_scan_cmd();
+    break;
+
+  case PANEL:
+    if (digitalRead(GLASS_DOWN_SENSOR) == LOW)
+      send_scan_cmd();
+
+    break;
+
+  case AUTO:
+    // disabled
+    break;
   }
 }
 
-void handle_glass_down(StateButton *self)
+// glass
+
+void handle_glass_down_sensor(StateButton *self)
 {
   if (stateButtons[8].counter % 2 == 0)
     return;
 
-  delay(200);
+  analogWrite(GLASS_MOTOR_DOWN, 0);
 
   if (stateButtons[6].counter == AUTO)
   {
+    BottomTouchdownFlag = true;
+    delay(200);
     send_scan_cmd();
+    delay(1000);
+    BottomTouchdownFlag = false;
+
+    spin_glass_up();
+  }
+}
+
+void handle_glass_up_sensor(StateButton *self)
+{
+  if (stateButtons[7].counter % 2 == 1)
+    return;
+
+  analogWrite(GLASS_MOTOR_UP, 0);
+}
+
+// cradle
+
+void open_cradle(StateButton *self)
+{
+  if (stateButtons[2].counter % 2 == 0)
+  {
+    // release
+
+    analogWrite(CRADLE_OPEN_MOTOR, 0);
+  }
+  else
+  {
+    // push
+
+    if (digitalRead(CRADLE_OPEN_SENSOR) == HIGH)
+      analogWrite(CRADLE_OPEN_MOTOR, MOTOR_SPEED);
+  }
+}
+
+void close_cradle(StateButton *self)
+{
+
+  if (stateButtons[3].counter % 2 == 0)
+  {
+    // release
+
+    analogWrite(CRADLE_CLOSE_MOTOR, 0);
+  }
+  else
+  {
+    // push
+
+    if (digitalRead(CRADLE_CLOSE_SENSOR) == HIGH)
+      analogWrite(CRADLE_CLOSE_MOTOR, MOTOR_SPEED);
+  }
+}
+
+void handle_cradle_open_sensor(StateButton *self)
+{
+
+  Serial.println("OPEN HIT");
+
+  if (stateButtons[10].counter % 2 == 0)
+    return;
+
+  Serial.println("OPEN PASS");
+
+  analogWrite(CRADLE_OPEN_MOTOR, 0);
+}
+
+void handle_cradle_close_sensor(StateButton *self)
+{
+
+  Serial.println("CLOSE HIT");
+
+  if (stateButtons[11].counter % 2 == 0)
+    return;
+
+  Serial.println("CLOSE PASS");
+
+  analogWrite(CRADLE_CLOSE_MOTOR, 0);
+}
+
+void handle_pedal(StateButton *self)
+{
+
+  if (stateButtons[4].counter % 2 == 0)
+  {
+    // release
+    Serial.println("Pedal release");
+
+    digitalWrite(BUZZER, LOW);
+
+    switch (stateButtons[6].counter)
+    {
+    case PEDAL:
+      send_scan_cmd();
+      break;
+    case PANEL:
+      analogWrite(GLASS_MOTOR_DOWN, 0);
+
+      // to avoid jitter clicking and getting the pedal stuck
+      // only return panel when
+      if (digitalRead(GLASS_UP_SENSOR) == HIGH)
+      {
+        delay(MOTOR_SAFETY_DELAY);
+        spin_glass_up();
+      }
+
+      break;
+    case AUTO:
+      // return glass only if it hasn't come all the way down
+      if (BottomTouchdownFlag == false)
+      {
+        analogWrite(GLASS_MOTOR_DOWN, 0);
+        delay(MOTOR_SAFETY_DELAY);
+        spin_glass_up();
+      }
+      break;
+    }
+  }
+  else
+  {
+    // push
+    Serial.println("Pedal push");
+
+    digitalWrite(BUZZER, HIGH);
+
+    switch (stateButtons[6].counter)
+    {
+    case PEDAL:
+      send_scan_cmd();
+      break;
+    case PANEL:
+    case AUTO:
+      analogWrite(GLASS_MOTOR_UP, 0);
+      delay(MOTOR_SAFETY_DELAY);
+      spin_glass_down();
+      break;
+    }
   }
 }
 
 // buzzer
 
-void setup()
-{
-
-  // Button PinModes
-  for (int i = 0; i < sizeof(stateButtons) / sizeof(struct StateButton); i++)
-  {
-    pinMode(stateButtons[i].PIN, INPUT);
-  }
-
-  pinMode(17, INPUT_PULLUP);
-
-  pinMode(CRADLE_OPEN_SENSOR, INPUT);
-  pinMode(CRADLE_CLOSE_SENSOR, INPUT);
-  pinMode(CRADLE_OPEN_MOTOR, OUTPUT);
-  pinMode(CRADLE_CLOSE_MOTOR, OUTPUT);
-  pinMode(GLASS_DOWN_SENSOR, INPUT);
-  pinMode(GLASS_UP_SENSOR, INPUT);
-  pinMode(GLASS_MOTOR_UP, OUTPUT);
-  pinMode(GLASS_MOTOR_DOWN, OUTPUT);
-
-  Keyboard.begin();
-
-  lcd.init();
-  lcd.backlight();
-
-  // lcd.setCursor(1, 0);
-  // lcd.print("Theia Pro Mega");
-  // lcd.setCursor(2, 1);
-  // lcd.print("Book Scanner");
-
-  // delay(200); // bootup delay
-
-  printSettings();
-}
+void blink(){};
 
 void printSettings()
 {
@@ -261,7 +442,7 @@ void printSettings()
     lcd.print("Calib");
     break;
   }
-}
+};
 
 // put this in the loop function
 void cycleStateButtons()
@@ -272,11 +453,58 @@ void cycleStateButtons()
   }
 };
 
+void setup()
+{
+
+  // Button PinModes
+  for (int i = 0; i < sizeof(stateButtons) / sizeof(struct StateButton); i++)
+  {
+    pinMode(stateButtons[i].PIN, INPUT);
+  }
+
+  pinMode(13, OUTPUT);
+
+  pinMode(CRADLE_OPEN_SENSOR, INPUT);
+  pinMode(CRADLE_CLOSE_SENSOR, INPUT);
+  pinMode(CRADLE_OPEN_MOTOR, OUTPUT);
+  pinMode(CRADLE_CLOSE_MOTOR, OUTPUT);
+
+  pinMode(12, INPUT);
+  pinMode(11, INPUT);
+
+  pinMode(GLASS_MOTOR_UP, OUTPUT);
+  pinMode(GLASS_MOTOR_DOWN, OUTPUT);
+
+  Keyboard.begin();
+
+  lcd.init();
+  lcd.backlight();
+
+  // lcd.setCursor(1, 0);
+  // lcd.print("Theia Pro Mega");
+  // lcd.setCursor(2, 1);
+  // lcd.print("Book Scanner");
+
+  // delay(200); // bootup delay
+
+  printSettings();
+
+  Serial.begin(9600);
+}
+
 void loop()
 {
+
   cycleStateButtons();
 
+  // char str[24];
+  // sprintf(str, "%lu", millis());
+  // lcd.setCursor(0, 0);
+  // lcd.print(str);
+
+  doChores();
+
   // char str[4];
-  // sprintf(str, "%d", digitalRead(A0));
+  // sprintf(str, "%d", digitalRead(A2));
   // lcd.print(str);
 }
