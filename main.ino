@@ -49,7 +49,11 @@ unsigned short GLASS_DOWN_SENSOR = 8;
 unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
 unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
+const unsigned long CALIBRATION_DURATION = 30 * 1000U;
+
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
+
+bool IsCalibrating = false; // Is the calibration in action
 
 void nothing(){};
 
@@ -72,20 +76,34 @@ void handle_cradle_close_sensor(StateButton *self);
 
 void handle_pedal(StateButton *self);
 
+void printSettings();
+
 // attempts to spin the glass up
 // does nothing if the up sensor won't allow it
-void spin_glass_up()
+bool spin_glass_up()
 {
   if (digitalRead(GLASS_UP_SENSOR) == HIGH)
+  {
     analogWrite(GLASS_MOTOR_UP, MOTOR_SPEED);
+    analogWrite(GLASS_MOTOR_DOWN, 0);
+    return true;
+  }
+
+  return false;
 }
 
 // attempts to spin the glass down
 // does nothing if the down sensor won't allow it
-void spin_glass_down()
+bool spin_glass_down()
 {
   if (digitalRead(GLASS_DOWN_SENSOR) == HIGH)
+  {
     analogWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED);
+    analogWrite(GLASS_MOTOR_UP, 0);
+    return true;
+  }
+
+  return false;
 }
 
 struct StateButton stateButtons[] = {
@@ -105,6 +123,8 @@ struct StateButton stateButtons[] = {
 
 #pragma endregion definitions
 
+// utility
+
 void test(StateButton *self)
 {
   lcd.clear();
@@ -123,6 +143,18 @@ void countup()
   sprintf(str, "%d", count++);
   lcd.setCursor(0, 0);
   lcd.print(str);
+}
+
+// alert
+
+const int MESSAGE_DELAY = 3000;
+
+void alert_lcd(char msg[32])
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(msg);
+  waitcall(printSettings, MESSAGE_DELAY);
 }
 
 // order
@@ -149,6 +181,61 @@ void switch_mode(StateButton *self)
     self->counter = AUTO;
 
   printSettings();
+}
+
+// progress
+
+unsigned short progress_state = 16;
+
+char *progress_message;
+
+unsigned long progress_duration = 0;
+
+// calibrating...
+// ================ <
+
+// RECURSIVE
+//
+void progress_rev()
+{
+
+  // check for abortion
+  if (IsCalibrating == false)
+  {
+    progress_state = 16;
+    progress_duration = 0;
+    return;
+  }
+
+  lcd.clear();
+
+  // end recursion when state ends
+  if (progress_state-- == 0)
+  {
+    progress_state = 16;
+    printSettings();
+    return;
+  }
+
+  lcd.setCursor(0, 0);
+  lcd.print(progress_message);
+
+  lcd.setCursor(0, 1);
+  for (unsigned short i = 0; i <= progress_state; i++)
+    lcd.print(">");
+
+  waitcall(progress_rev, floor(progress_duration / 16));
+}
+
+void progress_start(char msg[16], unsigned long duration)
+{
+  progress_state = 16;
+  progress_message = msg;
+  progress_duration = duration;
+
+  lcd.clear();
+
+  progress_rev();
 }
 
 // send scan command according to scan mode
@@ -275,26 +362,16 @@ void close_cradle(StateButton *self)
 
 void handle_cradle_open_sensor(StateButton *self)
 {
-
-  Serial.println("OPEN HIT");
-
   if (stateButtons[10].counter % 2 == 0)
     return;
-
-  Serial.println("OPEN PASS");
 
   analogWrite(CRADLE_OPEN_MOTOR, 0);
 }
 
 void handle_cradle_close_sensor(StateButton *self)
 {
-
-  Serial.println("CLOSE HIT");
-
   if (stateButtons[11].counter % 2 == 0)
     return;
-
-  Serial.println("CLOSE PASS");
 
   analogWrite(CRADLE_CLOSE_MOTOR, 0);
 }
@@ -305,9 +382,6 @@ void handle_pedal(StateButton *self)
   if (stateButtons[4].counter % 2 == 0)
   {
     // release
-    Serial.println("Pedal release");
-
-    digitalWrite(BUZZER, LOW);
 
     switch (stateButtons[6].counter)
     {
@@ -340,20 +414,57 @@ void handle_pedal(StateButton *self)
   else
   {
     // push
-    Serial.println("Pedal push");
-
-    digitalWrite(BUZZER, HIGH);
 
     switch (stateButtons[6].counter)
     {
     case PEDAL:
       send_scan_cmd();
       break;
+
     case PANEL:
     case AUTO:
       analogWrite(GLASS_MOTOR_UP, 0);
       delay(MOTOR_SAFETY_DELAY);
       spin_glass_down();
+      break;
+
+    case CALIB:
+
+      if (!IsCalibrating)
+      {
+
+        if (!spin_glass_down())
+          break;
+
+        // start calibration
+        IsCalibrating = true;
+        progress_start("Calibration Mode", CALIBRATION_DURATION);
+        waitcall([]()
+                 {
+                   digitalWrite(BUZZER, HIGH);
+
+                   waitcall([]()
+                            { 
+                              // end calibration
+                              digitalWrite(BUZZER, LOW);
+
+                              spin_glass_up();
+                             },
+                            5640U); },
+                 CALIBRATION_DURATION - 5000);
+      }
+      else
+      {
+        // abort calibration
+        IsCalibrating = false;
+
+        digitalWrite(BUZZER, LOW);
+        clear_queue(); // !
+
+        spin_glass_up();
+        printSettings();
+      }
+
       break;
     }
   }
@@ -376,46 +487,46 @@ void printSettings()
   // auto, panel, pedal
 
   lcd.setCursor(0, 0);
-  lcd.print("SCN:");
+  lcd.print("SCN: ");
   lcd.setCursor(0, 1);
 
   switch (stateButtons[5].counter)
   {
   case 0:
   case 1:
-    lcd.print("R>L");
+    lcd.print("R>L  ");
     break;
   case 2:
   case 3:
-    lcd.print("L>R");
+    lcd.print("L>R  ");
     break;
   case 4:
   case 5:
-    lcd.print("<R>");
+    lcd.print("<R>  ");
     break;
   case 6:
   case 7:
-    lcd.print("<L>");
+    lcd.print("<L>  ");
     break;
   }
 
   lcd.setCursor(5, 0);
-  lcd.print("LED:");
+  lcd.print("LED:  ");
   lcd.setCursor(5, 1);
 
   switch (stateButtons[1].counter)
   {
   case 0:
   case 1:
-    lcd.print("Side");
+    lcd.print("Side  ");
     break;
   case 2:
   case 3:
-    lcd.print("Back");
+    lcd.print("Back  ");
     break;
   case 4:
   case 5:
-    lcd.print("Both");
+    lcd.print("Both  ");
     break;
   }
 

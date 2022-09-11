@@ -7,6 +7,7 @@
     "string_view": "cpp",
     "initializer_list": "cpp",
     "state_button.h": "c",
-    "queue.h": "c"
+    "queue.h": "c",
+    "*.ixx": "cpp"
   }
 }

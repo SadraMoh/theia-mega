@@ -7,9 +7,20 @@ struct Task
   taskCallback func;
 };
 
-const size_t TASK_POOL_SIZE = 8;
+const size_t TASK_POOL_SIZE = 16;
 
 static const struct Task *TaskPool[TASK_POOL_SIZE];
+
+void clear_queue()
+{
+  // insert task to the task pool
+  for (size_t i = 0; i < TASK_POOL_SIZE; i++)
+  {
+
+    free(TaskPool[i]);
+    TaskPool[i] = NULL;
+  }
+}
 
 void waitcall(taskCallback func, unsigned long delay)
 {
@@ -38,7 +49,6 @@ void doChores()
   {
     if (TaskPool[i] == NULL || TaskPool[i] == nullptr)
       continue;
-
 
     if ((TaskPool[i]->start + TaskPool[i]->delay) < millis())
     {
