@@ -87,8 +87,8 @@ bool spin_glass_up()
 {
   if (digitalRead(GLASS_UP_SENSOR) == HIGH)
   {
-    analogWrite(GLASS_MOTOR_UP, MOTOR_SPEED); 
-    analogWrite(GLASS_MOTOR_DOWN, 0);
+    digitalWrite(GLASS_MOTOR_UP, LOW);    // start
+    digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
     return true;
   }
 
@@ -101,8 +101,8 @@ bool spin_glass_down()
 {
   if (digitalRead(GLASS_DOWN_SENSOR) == HIGH)
   {
-    analogWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED);
-    analogWrite(GLASS_MOTOR_UP, 0);
+    digitalWrite(GLASS_MOTOR_DOWN, LOW); // start
+    digitalWrite(GLASS_MOTOR_UP, HIGH);  // stop
     return true;
   }
 
@@ -299,10 +299,14 @@ void handle_scan_button(StateButton *self)
   if (stateButtons[7].counter % 2 == 1)
     return;
 
+  // push
+
   switch (stateButtons[6].counter)
   {
   case PEDAL:
+
     send_scan_cmd();
+
     break;
 
   case PANEL:
@@ -375,7 +379,7 @@ void handle_glass_down_sensor(StateButton *self)
   if (stateButtons[8].counter % 2 == 0)
     return;
 
-  analogWrite(GLASS_MOTOR_DOWN, 0);
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
   if (stateButtons[6].counter == AUTO)
   {
@@ -394,7 +398,7 @@ void handle_glass_up_sensor(StateButton *self)
   if (stateButtons[7].counter % 2 == 1)
     return;
 
-  analogWrite(GLASS_MOTOR_UP, 0);
+  digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
 }
 
 // cradle
@@ -459,11 +463,8 @@ void handle_pedal(StateButton *self)
 
     switch (stateButtons[6].counter)
     {
-    case PEDAL:
-      send_scan_cmd();
-      break;
     case PANEL:
-      analogWrite(GLASS_MOTOR_DOWN, 0);
+      digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
       // to avoid jitter clicking and getting the pedal stuck
       // only return panel when
@@ -478,7 +479,7 @@ void handle_pedal(StateButton *self)
       // return glass only if it hasn't come all the way down
       if (BottomTouchdownFlag == false)
       {
-        analogWrite(GLASS_MOTOR_DOWN, 0);
+        digitalWrite(GLASS_MOTOR_DOWN, HIGH);
         delay(MOTOR_SAFETY_DELAY);
         spin_glass_up();
       }
@@ -497,7 +498,7 @@ void handle_pedal(StateButton *self)
 
     case PANEL:
     case AUTO:
-      analogWrite(GLASS_MOTOR_UP, 0);
+      digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
       delay(MOTOR_SAFETY_DELAY);
       spin_glass_down();
       break;
@@ -517,10 +518,10 @@ void printSettings()
 {
 
   //| Order:   Mode: |
-  //| L -> R   PEDAL |
+  //| L to R   PEDAL |
   // ^^^^^^^^^^^^^^^^
 
-  // R -> L, L -> R, RIGHT, LEFT
+  // R to L, L to R, RIGHT, LEFT
   // side, back, both
   // auto, panel, pedal
 
@@ -532,19 +533,19 @@ void printSettings()
   {
   case 0:
   case 1:
-    lcd.print(" R -> L   ");
+    lcd.print(" R to L   ");
     break;
   case 2:
   case 3:
-    lcd.print(" L -> R   ");
+    lcd.print(" L to R   ");
     break;
   case 4:
   case 5:
-    lcd.print(" RIGHT*   ");
+    lcd.print(" Right*   ");
     break;
   case 6:
   case 7:
-    lcd.print(" LEFT*    ");
+    lcd.print(" Left*    ");
     break;
   }
 
@@ -601,6 +602,9 @@ void setup()
 
   pinMode(GLASS_MOTOR_UP, OUTPUT);
   pinMode(GLASS_MOTOR_DOWN, OUTPUT);
+
+  digitalWrite(GLASS_MOTOR_UP, HIGH);
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH);
 
   digitalWrite(SCAN_LED, HIGH);
 

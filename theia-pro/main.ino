@@ -36,18 +36,18 @@ const LiquidCrystal_I2C lcd(0x27, 16, 4);
 #define PEDAL 4
 #define CALIB 6
 
-unsigned short BUZZER = 4U;
-unsigned short SCAN_LED = 13U;
+const unsigned short LED_PROJECTOR = 9U;
+const unsigned short LED_PROJECTOR_HIGH = 255; // lit
+const unsigned short LED_PROJECTOR_LOW = 60;   // dim
+const unsigned long LED_PROJECTOR_TIMOUT = 5U * 60U * 1000U;
 
-unsigned short CRADLE_OPEN_SENSOR = 12;  // BLUE
-unsigned short CRADLE_CLOSE_SENSOR = 11; // GREEN
-unsigned short CRADLE_OPEN_MOTOR = 10;   // PINK
-unsigned short CRADLE_CLOSE_MOTOR = 9;   // WHITE
+const unsigned short BUZZER = 4U;
+const unsigned short SCAN_LED = 13U;
 
-unsigned short GLASS_UP_SENSOR = 7;
-unsigned short GLASS_DOWN_SENSOR = 8;
-unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
-unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
+const unsigned short GLASS_UP_SENSOR = 7;
+const unsigned short GLASS_DOWN_SENSOR = 8;
+const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
+const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
 const unsigned long CALIBRATION_DURATION = 30 * 1000U;
 
@@ -68,13 +68,9 @@ void handle_scan_button(StateButton *self);
 void handle_glass_down_sensor(StateButton *self);
 void handle_glass_up_sensor(StateButton *self);
 
-void open_cradle(StateButton *self);
-
-void close_cradle(StateButton *self);
-void handle_cradle_open_sensor(StateButton *self);
-void handle_cradle_close_sensor(StateButton *self);
-
 void handle_pedal(StateButton *self);
+
+void handle_projector(StateButton *self);
 
 void printSettings();
 
@@ -107,18 +103,17 @@ bool spin_glass_down()
 }
 
 struct StateButton stateButtons[] = {
-    {4U, 0U, 0, 0, 0, 0U, nothing},                     // 0  Buzzer
-    {13U, 0U, 0, 0, 0, 0U, switch_led_side},            // 1  LED Mode
-    {A0, 0U, 0, 0, 0, 0U, open_cradle},                 // 2  Cradle Open Button
-    {A1, 0U, 0, 0, 0, 0U, close_cradle},                // 3  Cradle Close Button
-    {A2, 0U, 0, 0, 0, 0U, handle_pedal},                // 4  Pedal
-    {A3, 0U, 0, 0, 0, 0U, switch_ord},                  // 5  Scan Order Selector
-    {A4, 0U, 0, 0, 0, 0U, switch_mode},                 // 6  Scan Mode & Calibration
-    {A5, 0U, 0, 0, 0, 0U, handle_scan_button},          // 7  Scan
-    {8U, 0U, 0, 1, 1, 0U, handle_glass_down_sensor},    // 8  Glass Down Sensor
-    {7U, 0U, 0, 1, 1, 0U, handle_glass_up_sensor},      // 9  Glass Up Sensor
-    {12U, 0U, 0, 1, 1, 0U, handle_cradle_open_sensor},  // 10 Cradle Open Sensor  (BLUE)
-    {11U, 0U, 0, 1, 1, 0U, handle_cradle_close_sensor}, // 11 Cradle Clsoe Sensor (GREEN)
+    {4U, 0U, 0, 0, 0, 0U, nothing},                  // 0  Buzzer
+    {13U, 0U, 0, 0, 0, 0U, switch_led_side},         // 1  LED Mode
+    {A0, 0U, 0, 0, 0, 0U, nothing},                  // 2  [UNUSED]
+    {A1, 0U, 0, 0, 0, 0U, nothing},                  // 3  [UNUSED]
+    {A2, 0U, 0, 0, 0, 0U, handle_pedal},             // 4  Pedal
+    {A3, 0U, 0, 0, 0, 0U, switch_ord},               // 5  Scan Order Selector
+    {A4, 0U, 0, 0, 0, 0U, switch_mode},              // 6  Scan Mode & Calibration
+    {A5, 0U, 0, 0, 0, 0U, handle_scan_button},       // 7  Scan
+    {8U, 0U, 0, 1, 1, 0U, handle_glass_down_sensor}, // 8  Glass Down Sensor
+    {7U, 0U, 0, 1, 1, 0U, handle_glass_up_sensor},   // 9  Glass Up Sensor
+    {10U, 0U, 0, 0, 0, 0U, handle_projector},        // 10 LED Projector Sensor
 };
 
 #pragma endregion definitions
@@ -323,59 +318,6 @@ void handle_glass_up_sensor(StateButton *self)
   analogWrite(GLASS_MOTOR_UP, 0);
 }
 
-// cradle
-
-void open_cradle(StateButton *self)
-{
-  if (stateButtons[2].counter % 2 == 0)
-  {
-    // release
-
-    analogWrite(CRADLE_OPEN_MOTOR, 0);
-  }
-  else
-  {
-    // push
-
-    if (digitalRead(CRADLE_OPEN_SENSOR) == HIGH)
-      analogWrite(CRADLE_OPEN_MOTOR, MOTOR_SPEED);
-  }
-}
-
-void close_cradle(StateButton *self)
-{
-
-  if (stateButtons[3].counter % 2 == 0)
-  {
-    // release
-
-    analogWrite(CRADLE_CLOSE_MOTOR, 0);
-  }
-  else
-  {
-    // push
-
-    if (digitalRead(CRADLE_CLOSE_SENSOR) == HIGH)
-      analogWrite(CRADLE_CLOSE_MOTOR, MOTOR_SPEED);
-  }
-}
-
-void handle_cradle_open_sensor(StateButton *self)
-{
-  if (stateButtons[10].counter % 2 == 0)
-    return;
-
-  analogWrite(CRADLE_OPEN_MOTOR, 0);
-}
-
-void handle_cradle_close_sensor(StateButton *self)
-{
-  if (stateButtons[11].counter % 2 == 0)
-    return;
-
-  analogWrite(CRADLE_CLOSE_MOTOR, 0);
-}
-
 void handle_pedal(StateButton *self)
 {
 
@@ -385,9 +327,6 @@ void handle_pedal(StateButton *self)
 
     switch (stateButtons[6].counter)
     {
-    case PEDAL:
-      send_scan_cmd();
-      break;
     case PANEL:
       analogWrite(GLASS_MOTOR_DOWN, 0);
 
@@ -470,69 +409,67 @@ void handle_pedal(StateButton *self)
   }
 }
 
-// buzzer
+// projector
 
-void blink(){};
+void handle_projector(StateButton *self)
+{
+  clear_queue();
+
+  if (stateButtons[10].counter % 2 == 0)
+  {
+    // release
+    analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
+  }
+  else
+  {
+    // push
+
+    analogWrite(LED_PROJECTOR, LED_PROJECTOR_HIGH);
+
+    waitcall([]()
+             { analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW); },
+             LED_PROJECTOR_TIMOUT);
+  }
+}
 
 void printSettings()
 {
-  // lcd.clear();
 
-  //|ORD  LED   MODE |
-  //|L>R  side  PEDAL|
+  //| Order:   Mode: |
+  //| L to R   PEDAL |
   // ^^^^^^^^^^^^^^^^
 
-  // R>L, L>R, R, L
+  // R to L, L to R, RIGHT, LEFT
   // side, back, both
   // auto, panel, pedal
 
   lcd.setCursor(0, 0);
-  lcd.print("SCN: ");
+  lcd.print(" Order:   ");
   lcd.setCursor(0, 1);
 
   switch (stateButtons[5].counter)
   {
   case 0:
   case 1:
-    lcd.print("R>L  ");
+    lcd.print(" R to L   ");
     break;
   case 2:
   case 3:
-    lcd.print("L>R  ");
+    lcd.print(" L to R   ");
     break;
   case 4:
   case 5:
-    lcd.print("<R>  ");
+    lcd.print(" Right*   ");
     break;
   case 6:
   case 7:
-    lcd.print("<L>  ");
+    lcd.print(" Left*    ");
     break;
   }
 
-  lcd.setCursor(5, 0);
-  lcd.print("LED:  ");
-  lcd.setCursor(5, 1);
-
-  switch (stateButtons[1].counter)
-  {
-  case 0:
-  case 1:
-    lcd.print("Side  ");
-    break;
-  case 2:
-  case 3:
-    lcd.print("Back  ");
-    break;
-  case 4:
-  case 5:
-    lcd.print("Both  ");
-    break;
-  }
-
-  lcd.setCursor(11, 0);
-  lcd.print("MODE:");
-  lcd.setCursor(11, 1);
+  lcd.setCursor(10, 0);
+  lcd.print("Mode: ");
+  lcd.setCursor(10, 1);
 
   switch (stateButtons[6].counter)
   {
@@ -542,15 +479,15 @@ void printSettings()
     break;
   case 2:
   case 3:
-    lcd.print("Panel");
+    lcd.print("Panel ");
     break;
   case 4:
   case 5:
-    lcd.print("Pedal");
+    lcd.print("Pedal ");
     break;
   case 6:
   case 7:
-    lcd.print("Calib");
+    lcd.print("Calib ");
     break;
   }
 };
@@ -573,12 +510,9 @@ void setup()
     pinMode(stateButtons[i].PIN, INPUT);
   }
 
-  pinMode(13, OUTPUT);
+  pinMode(LED_PROJECTOR, OUTPUT);
 
-  pinMode(CRADLE_OPEN_SENSOR, INPUT);
-  pinMode(CRADLE_CLOSE_SENSOR, INPUT);
-  pinMode(CRADLE_OPEN_MOTOR, OUTPUT);
-  pinMode(CRADLE_CLOSE_MOTOR, OUTPUT);
+  pinMode(13, OUTPUT);
 
   pinMode(12, INPUT);
   pinMode(11, INPUT);
@@ -586,13 +520,15 @@ void setup()
   pinMode(GLASS_MOTOR_UP, OUTPUT);
   pinMode(GLASS_MOTOR_DOWN, OUTPUT);
 
+  analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
+
   Keyboard.begin();
 
   lcd.init();
   lcd.backlight();
 
   lcd.setCursor(1, 0);
-  lcd.print("Theia Pro Mega");
+  lcd.print("   Theia Pro   ");
   lcd.setCursor(2, 1);
   lcd.print("Book Scanner");
 
