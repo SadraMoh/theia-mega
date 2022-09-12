@@ -591,12 +591,12 @@ void setup()
   lcd.init();
   lcd.backlight();
 
-  // lcd.setCursor(1, 0);
-  // lcd.print("Theia Pro Mega");
-  // lcd.setCursor(2, 1);
-  // lcd.print("Book Scanner");
+  lcd.setCursor(1, 0);
+  lcd.print("Theia Pro Mega");
+  lcd.setCursor(2, 1);
+  lcd.print("Book Scanner");
 
-  // delay(200); // bootup delay
+  delay(2000); // bootup delay
 
   printSettings();
 
