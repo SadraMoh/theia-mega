@@ -2,5 +2,5 @@
     "board": "arduino:avr:leonardo",
     "programmer": "arduino:avrispmkii",
     "port": "/dev/ttyACM0",
-    "sketch": "theia-pro-mega/main.ino"
+    "sketch": "theia-pro/main.ino"
 }

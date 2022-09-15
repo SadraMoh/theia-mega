@@ -49,8 +49,8 @@ const unsigned short GLASS_DOWN_SENSOR = 8;
 const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
 const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
-const unsigned long CALIBRATION_DURATION = 3 * 60 * 1000U;
-const unsigned long CALIBRATION_ALARM_DURATION = 8 * 1000U;
+const unsigned long CALIBRATION_DURATION = 3U * 60U * 1000U;
+const unsigned long CALIBRATION_ALARM_DURATION = 8U * 1000U;
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 
@@ -178,6 +178,8 @@ void scan_blink()
 
 void switch_ord(StateButton *self)
 {
+  Serial.print("ORDER");
+
   if (self->counter > 7)
     self->counter = RTL;
 
@@ -479,7 +481,6 @@ void handle_pedal(StateButton *self)
       // return glass only if it hasn't come all the way down
       if (BottomTouchdownFlag == false)
       {
-        digitalWrite(GLASS_MOTOR_DOWN, HIGH);
         delay(MOTOR_SAFETY_DELAY);
         spin_glass_up();
       }
@@ -603,8 +604,8 @@ void setup()
   pinMode(GLASS_MOTOR_UP, OUTPUT);
   pinMode(GLASS_MOTOR_DOWN, OUTPUT);
 
-  digitalWrite(GLASS_MOTOR_UP, HIGH);
-  digitalWrite(GLASS_MOTOR_DOWN, HIGH);
+  digitalWrite(GLASS_MOTOR_UP, HIGH);   // stop
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
   digitalWrite(SCAN_LED, HIGH);
 

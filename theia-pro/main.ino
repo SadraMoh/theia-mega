@@ -38,7 +38,7 @@ const LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 const unsigned short LED_PROJECTOR = 9U;
 const unsigned short LED_PROJECTOR_HIGH = 255; // lit
-const unsigned short LED_PROJECTOR_LOW = 60;   // dim
+const unsigned short LED_PROJECTOR_LOW = 20;   // dimRL
 const unsigned long LED_PROJECTOR_TIMOUT = 5U * 60U * 1000U;
 
 const unsigned short BUZZER = 4U;
@@ -80,8 +80,8 @@ bool spin_glass_up()
 {
   if (digitalRead(GLASS_UP_SENSOR) == HIGH)
   {
-    analogWrite(GLASS_MOTOR_UP, MOTOR_SPEED);
-    analogWrite(GLASS_MOTOR_DOWN, 0);
+    digitalWrite(GLASS_MOTOR_UP, MOTOR_SPEED); // start
+    digitalWrite(GLASS_MOTOR_DOWN, 0);         // stop
     return true;
   }
 
@@ -94,8 +94,8 @@ bool spin_glass_down()
 {
   if (digitalRead(GLASS_DOWN_SENSOR) == HIGH)
   {
-    analogWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED);
-    analogWrite(GLASS_MOTOR_UP, 0);
+    digitalWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED); // start
+    digitalWrite(GLASS_MOTOR_UP, 0);             // stop
     return true;
   }
 
@@ -296,7 +296,7 @@ void handle_glass_down_sensor(StateButton *self)
   if (stateButtons[8].counter % 2 == 0)
     return;
 
-  analogWrite(GLASS_MOTOR_DOWN, 0);
+  digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
 
   if (stateButtons[6].counter == AUTO)
   {
@@ -315,7 +315,7 @@ void handle_glass_up_sensor(StateButton *self)
   if (stateButtons[7].counter % 2 == 1)
     return;
 
-  analogWrite(GLASS_MOTOR_UP, 0);
+  digitalWrite(GLASS_MOTOR_UP, 0); // stop
 }
 
 void handle_pedal(StateButton *self)
@@ -328,7 +328,7 @@ void handle_pedal(StateButton *self)
     switch (stateButtons[6].counter)
     {
     case PANEL:
-      analogWrite(GLASS_MOTOR_DOWN, 0);
+      digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
 
       // to avoid jitter clicking and getting the pedal stuck
       // only return panel when
@@ -343,7 +343,7 @@ void handle_pedal(StateButton *self)
       // return glass only if it hasn't come all the way down
       if (BottomTouchdownFlag == false)
       {
-        analogWrite(GLASS_MOTOR_DOWN, 0);
+        digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
         delay(MOTOR_SAFETY_DELAY);
         spin_glass_up();
       }
@@ -362,7 +362,7 @@ void handle_pedal(StateButton *self)
 
     case PANEL:
     case AUTO:
-      analogWrite(GLASS_MOTOR_UP, 0);
+      digitalWrite(GLASS_MOTOR_UP, 0); // stop
       delay(MOTOR_SAFETY_DELAY);
       spin_glass_down();
       break;
