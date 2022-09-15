@@ -37,9 +37,9 @@ const LiquidCrystal_I2C lcd(0x27, 16, 4);
 #define CALIB 6
 
 const unsigned short LED_PROJECTOR = 9U;
-const unsigned short LED_PROJECTOR_HIGH = 255; // lit
-const unsigned short LED_PROJECTOR_LOW = 20;   // dimRL
-const unsigned long LED_PROJECTOR_TIMOUT = 5U * 60U * 1000U;
+const unsigned short LED_PROJECTOR_HIGH = 255;      // lit
+const unsigned short LED_PROJECTOR_LOW = 20;        // dimRL
+const unsigned long LED_PROJECTOR_TIMOUT = 300000U; // 5 minutes
 
 const unsigned short BUZZER = 4U;
 const unsigned short SCAN_LED = 13U;
@@ -49,11 +49,12 @@ const unsigned short GLASS_DOWN_SENSOR = 8;
 const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
 const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
-const unsigned long CALIBRATION_DURATION = 30 * 1000U;
+const unsigned long CALIBRATION_DURATION = 180000U;     // 3 minutes
+const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
-
-bool IsCalibrating = false; // Is the calibration in action
+bool IsCalibrating = false;       // Is the calibration in action
+bool IsScanBlinking = false;      // Is the scan button blinking
 
 void nothing(){};
 
@@ -80,8 +81,8 @@ bool spin_glass_up()
 {
   if (digitalRead(GLASS_UP_SENSOR) == HIGH)
   {
-    digitalWrite(GLASS_MOTOR_UP, MOTOR_SPEED); // start
-    digitalWrite(GLASS_MOTOR_DOWN, 0);         // stop
+    digitalWrite(GLASS_MOTOR_UP, LOW);    // start
+    digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
     return true;
   }
 
@@ -94,8 +95,8 @@ bool spin_glass_down()
 {
   if (digitalRead(GLASS_DOWN_SENSOR) == HIGH)
   {
-    digitalWrite(GLASS_MOTOR_DOWN, MOTOR_SPEED); // start
-    digitalWrite(GLASS_MOTOR_UP, 0);             // stop
+    digitalWrite(GLASS_MOTOR_DOWN, LOW); // start
+    digitalWrite(GLASS_MOTOR_UP, HIGH);  // stop
     return true;
   }
 
@@ -103,17 +104,17 @@ bool spin_glass_down()
 }
 
 struct StateButton stateButtons[] = {
-    {4U, 0U, 0, 0, 0, 0U, nothing},                  // 0  Buzzer
-    {13U, 0U, 0, 0, 0, 0U, switch_led_side},         // 1  LED Mode
-    {A0, 0U, 0, 0, 0, 0U, nothing},                  // 2  [UNUSED]
-    {A1, 0U, 0, 0, 0, 0U, nothing},                  // 3  [UNUSED]
-    {A2, 0U, 0, 0, 0, 0U, handle_pedal},             // 4  Pedal
-    {A3, 0U, 0, 0, 0, 0U, switch_ord},               // 5  Scan Order Selector
-    {A4, 0U, 0, 0, 0, 0U, switch_mode},              // 6  Scan Mode & Calibration
-    {A5, 0U, 0, 0, 0, 0U, handle_scan_button},       // 7  Scan
-    {8U, 0U, 0, 1, 1, 0U, handle_glass_down_sensor}, // 8  Glass Down Sensor
-    {7U, 0U, 0, 1, 1, 0U, handle_glass_up_sensor},   // 9  Glass Up Sensor
-    {10U, 0U, 0, 0, 0, 0U, handle_projector},        // 10 LED Projector Sensor
+    {4U, 0U, 0, 0, 0, 0, 0U, nothing},                  // 0  Buzzer
+    {13U, 0U, 0, 0, 0, 0, 0U, switch_led_side},         // 1  LED Mode
+    {A0, 0U, 0, 0, 0, 1, 0U, nothing},                  // 2  [UNUSED]
+    {A1, 0U, 0, 0, 0, 1, 0U, nothing},                  // 3  [UNUSED]
+    {A2, 0U, 0, 0, 0, 0, 0U, handle_pedal},             // 4  Pedal
+    {A3, 0U, 0, 0, 0, 0, 0U, switch_ord},               // 5  Scan Order Selector
+    {A4, 0U, 0, 0, 0, 0, 0U, switch_mode},              // 6  Scan Mode & Calibration
+    {A5, 0U, 0, 0, 0, 0, 0U, handle_scan_button},       // 7  Scan
+    {8U, 0U, 0, 1, 1, 0, 0U, handle_glass_down_sensor}, // 8  Glass Down Sensor
+    {7U, 0U, 0, 1, 1, 0, 0U, handle_glass_up_sensor},   // 9  Glass Up Sensor
+    {10U, 0U, 0, 0, 0, 0, 0U, handle_projector},        // 10 LED Projector Sensor
 };
 
 #pragma endregion definitions
@@ -152,6 +153,20 @@ void alert_lcd(char msg[32])
   waitcall(printSettings, MESSAGE_DELAY);
 }
 
+void scan_blink()
+{
+  if (IsScanBlinking == false)
+    return;
+
+  // blink
+  if (digitalRead(SCAN_LED) == HIGH)
+    digitalWrite(SCAN_LED, LOW);
+  else
+    digitalWrite(SCAN_LED, HIGH);
+
+  waitcall(scan_blink, 840);
+}
+
 // order
 
 void switch_ord(StateButton *self)
@@ -172,8 +187,18 @@ void switch_led_side(StateButton *self)
 
 void switch_mode(StateButton *self)
 {
+  // disable when calibrating
+  if (IsCalibrating)
+    return;
+
   if (self->counter > 7)
     self->counter = AUTO;
+
+  IsScanBlinking = self->counter == CALIB;
+  if (IsScanBlinking)
+    scan_blink();
+  else
+    digitalWrite(SCAN_LED, HIGH);
 
   printSettings();
 }
@@ -183,8 +208,6 @@ void switch_mode(StateButton *self)
 unsigned short progress_state = 16;
 
 char *progress_message;
-
-unsigned long progress_duration = 0;
 
 // calibrating...
 // ================ <
@@ -198,7 +221,6 @@ void progress_rev()
   if (IsCalibrating == false)
   {
     progress_state = 16;
-    progress_duration = 0;
     return;
   }
 
@@ -219,14 +241,13 @@ void progress_rev()
   for (unsigned short i = 0; i <= progress_state; i++)
     lcd.print(">");
 
-  waitcall(progress_rev, floor(progress_duration / 16));
+  waitcall(progress_rev, floor(CALIBRATION_DURATION / 16));
 }
 
 void progress_start(char msg[16], unsigned long duration)
 {
   progress_state = 16;
   progress_message = msg;
-  progress_duration = duration;
 
   lcd.clear();
 
@@ -271,6 +292,8 @@ void handle_scan_button(StateButton *self)
   if (stateButtons[7].counter % 2 == 1)
     return;
 
+  // push
+
   switch (stateButtons[6].counter)
   {
   case PEDAL:
@@ -286,6 +309,73 @@ void handle_scan_button(StateButton *self)
   case AUTO:
     // disabled
     break;
+
+  case CALIB:
+
+    if (!IsCalibrating)
+    {
+
+      if (!spin_glass_down())
+        break;
+
+      // start calibration
+      IsCalibrating = true;
+
+      // disable control panel buttons when calibrating
+      stateButtons[1].disabled = true;
+      stateButtons[5].disabled = true;
+      stateButtons[6].disabled = true;
+
+      // progress
+      progress_start("Calibration Mode", CALIBRATION_DURATION);
+
+      // stop blinkinkg
+      IsScanBlinking = false;
+      digitalWrite(SCAN_LED, HIGH);
+
+      // buzzer
+      waitcall([]()
+               {
+                  digitalWrite(BUZZER, HIGH);
+
+                  waitcall([]()
+                            { 
+                              // end calibration
+                              digitalWrite(BUZZER, LOW);
+
+                              IsScanBlinking = true; 
+                              scan_blink();
+
+                              // reinable control panel buttons
+                              stateButtons[1].disabled = false;
+                              stateButtons[5].disabled = false;
+                              stateButtons[6].disabled = false;
+
+                              spin_glass_up();
+                             },
+                            CALIBRATION_ALARM_DURATION + 640U); },
+               CALIBRATION_DURATION - CALIBRATION_ALARM_DURATION);
+    }
+    else
+    {
+      // abort calibration
+      IsCalibrating = false;
+
+      digitalWrite(BUZZER, LOW);
+      clear_queue(); // !
+
+      IsScanBlinking = true;
+      scan_blink();
+
+      // reinable control panel buttons
+      stateButtons[1].disabled = false;
+      stateButtons[5].disabled = false;
+      stateButtons[6].disabled = false;
+
+      spin_glass_up();
+      printSettings();
+    }
+    break;
   }
 }
 
@@ -296,7 +386,7 @@ void handle_glass_down_sensor(StateButton *self)
   if (stateButtons[8].counter % 2 == 0)
     return;
 
-  digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
   if (stateButtons[6].counter == AUTO)
   {
@@ -315,7 +405,7 @@ void handle_glass_up_sensor(StateButton *self)
   if (stateButtons[7].counter % 2 == 1)
     return;
 
-  digitalWrite(GLASS_MOTOR_UP, 0); // stop
+  digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
 }
 
 void handle_pedal(StateButton *self)
@@ -328,7 +418,7 @@ void handle_pedal(StateButton *self)
     switch (stateButtons[6].counter)
     {
     case PANEL:
-      digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
+      digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
       // to avoid jitter clicking and getting the pedal stuck
       // only return panel when
@@ -343,7 +433,7 @@ void handle_pedal(StateButton *self)
       // return glass only if it hasn't come all the way down
       if (BottomTouchdownFlag == false)
       {
-        digitalWrite(GLASS_MOTOR_DOWN, 0); // stop
+        digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
         delay(MOTOR_SAFETY_DELAY);
         spin_glass_up();
       }
@@ -362,48 +452,13 @@ void handle_pedal(StateButton *self)
 
     case PANEL:
     case AUTO:
-      digitalWrite(GLASS_MOTOR_UP, 0); // stop
+      digitalWrite(GLASS_MOTOR_UP, HIGH); // stop
       delay(MOTOR_SAFETY_DELAY);
       spin_glass_down();
       break;
 
     case CALIB:
-
-      if (!IsCalibrating)
-      {
-
-        if (!spin_glass_down())
-          break;
-
-        // start calibration
-        IsCalibrating = true;
-        progress_start("Calibration Mode", CALIBRATION_DURATION);
-        waitcall([]()
-                 {
-                   digitalWrite(BUZZER, HIGH);
-
-                   waitcall([]()
-                            { 
-                              // end calibration
-                              digitalWrite(BUZZER, LOW);
-
-                              spin_glass_up();
-                             },
-                            5640U); },
-                 CALIBRATION_DURATION - 5000);
-      }
-      else
-      {
-        // abort calibration
-        IsCalibrating = false;
-
-        digitalWrite(BUZZER, LOW);
-        clear_queue(); // !
-
-        spin_glass_up();
-        printSettings();
-      }
-
+      // disabled
       break;
     }
   }
@@ -496,9 +551,7 @@ void printSettings()
 void cycleStateButtons()
 {
   for (int i = 0; i < sizeof(stateButtons) / sizeof(struct StateButton); i++)
-  {
     state_button_check(&stateButtons[i]);
-  }
 };
 
 void setup()
@@ -510,6 +563,9 @@ void setup()
     pinMode(stateButtons[i].PIN, INPUT);
   }
 
+  pinMode(BUZZER, OUTPUT);
+  pinMode(SCAN_LED, OUTPUT);
+
   pinMode(LED_PROJECTOR, OUTPUT);
 
   pinMode(13, OUTPUT);
@@ -519,6 +575,9 @@ void setup()
 
   pinMode(GLASS_MOTOR_UP, OUTPUT);
   pinMode(GLASS_MOTOR_DOWN, OUTPUT);
+
+  digitalWrite(GLASS_MOTOR_UP, HIGH);   // stop
+  digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
 
   analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
 

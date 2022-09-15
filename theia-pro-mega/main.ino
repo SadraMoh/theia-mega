@@ -49,14 +49,12 @@ const unsigned short GLASS_DOWN_SENSOR = 8;
 const unsigned short GLASS_MOTOR_UP = 6;   // (RED LED)
 const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
-const unsigned long CALIBRATION_DURATION = 3U * 60U * 1000U;
-const unsigned long CALIBRATION_ALARM_DURATION = 8U * 1000U;
+const unsigned long CALIBRATION_DURATION = 180000U;     // 3 minutes
+const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
-
-bool IsCalibrating = false; // Is the calibration in action
-
-bool IsScanBlinking = false; // Is the scan button blinking
+bool IsCalibrating = false;       // Is the calibration in action
+bool IsScanBlinking = false;      // Is the scan button blinking
 
 void nothing(){};
 
@@ -110,18 +108,18 @@ bool spin_glass_down()
 }
 
 struct StateButton stateButtons[] = {
-    {4U, 0U, 0, 0, 0, 0U, nothing},                     // 0  Buzzer
-    {13U, 0U, 0, 0, 0, 0U, nothing},                    // 1  LED Mode (DEPRECATED)
-    {A0, 0U, 0, 0, 0, 0U, open_cradle},                 // 2  Cradle Open Button
-    {A1, 0U, 0, 0, 0, 0U, close_cradle},                // 3  Cradle Close Button
-    {A2, 0U, 0, 0, 0, 0U, handle_pedal},                // 4  Pedal
-    {A3, 0U, 0, 0, 0, 0U, switch_ord},                  // 5  Scan Order Selector
-    {A4, 0U, 0, 0, 0, 0U, switch_mode},                 // 6  Scan Mode & Calibration
-    {A5, 0U, 0, 0, 0, 0U, handle_scan_button},          // 7  Scan
-    {8U, 0U, 0, 1, 1, 0U, handle_glass_down_sensor},    // 8  Glass Down Sensor
-    {7U, 0U, 0, 1, 1, 0U, handle_glass_up_sensor},      // 9  Glass Up Sensor
-    {12U, 0U, 0, 1, 1, 0U, handle_cradle_open_sensor},  // 10 Cradle Open Sensor  (BLUE)
-    {11U, 0U, 0, 1, 1, 0U, handle_cradle_close_sensor}, // 11 Cradle Clsoe Sensor (GREEN)
+    {4U, 0U, 0, 0, 0, 0, 0U, nothing},                     // 0  Buzzer
+    {13U, 0U, 0, 0, 0, 0, 0U, nothing},                    // 1  LED Mode (DEPRECATED)
+    {A0, 0U, 0, 0, 0, 0, 0U, open_cradle},                 // 2  Cradle Open Button
+    {A1, 0U, 0, 0, 0, 0, 0U, close_cradle},                // 3  Cradle Close Button
+    {A2, 0U, 0, 0, 0, 0, 0U, handle_pedal},                // 4  Pedal
+    {A3, 0U, 0, 0, 0, 0, 0U, switch_ord},                  // 5  Scan Order Selector
+    {A4, 0U, 0, 0, 0, 0, 0U, switch_mode},                 // 6  Scan Mode & Calibration
+    {A5, 0U, 0, 0, 0, 0, 0U, handle_scan_button},          // 7  Scan
+    {8U, 0U, 0, 1, 1, 0, 0U, handle_glass_down_sensor},    // 8  Glass Down Sensor
+    {7U, 0U, 0, 1, 1, 0, 0U, handle_glass_up_sensor},      // 9  Glass Up Sensor
+    {12U, 0U, 0, 1, 1, 0, 0U, handle_cradle_open_sensor},  // 10 Cradle Open Sensor  (BLUE)
+    {11U, 0U, 0, 1, 1, 0, 0U, handle_cradle_close_sensor}, // 11 Cradle Clsoe Sensor (GREEN)
 };
 
 #pragma endregion definitions
@@ -178,8 +176,6 @@ void scan_blink()
 
 void switch_ord(StateButton *self)
 {
-  Serial.print("ORDER");
-
   if (self->counter > 7)
     self->counter = RTL;
 
@@ -196,6 +192,10 @@ void switch_led_side(StateButton *self)
 
 void switch_mode(StateButton *self)
 {
+  // disable when calibrating
+  if (IsCalibrating)
+    return;
+
   if (self->counter > 7)
     self->counter = AUTO;
 
@@ -214,8 +214,6 @@ unsigned short progress_state = 16;
 
 char *progress_message;
 
-unsigned long progress_duration = 0;
-
 // calibrating...
 // ================ <
 
@@ -228,7 +226,6 @@ void progress_rev()
   if (IsCalibrating == false)
   {
     progress_state = 16;
-    progress_duration = 0;
     return;
   }
 
@@ -249,14 +246,13 @@ void progress_rev()
   for (unsigned short i = 0; i <= progress_state; i++)
     lcd.print(">");
 
-  waitcall(progress_rev, floor(progress_duration / 16));
+  waitcall(progress_rev, floor(CALIBRATION_DURATION / 16));
 }
 
 void progress_start(char msg[16], unsigned long duration)
 {
   progress_state = 16;
   progress_message = msg;
-  progress_duration = duration;
 
   lcd.clear();
 
@@ -306,9 +302,7 @@ void handle_scan_button(StateButton *self)
   switch (stateButtons[6].counter)
   {
   case PEDAL:
-
     send_scan_cmd();
-
     break;
 
   case PANEL:
@@ -322,6 +316,7 @@ void handle_scan_button(StateButton *self)
     break;
 
   case CALIB:
+
     if (!IsCalibrating)
     {
 
@@ -481,6 +476,7 @@ void handle_pedal(StateButton *self)
       // return glass only if it hasn't come all the way down
       if (BottomTouchdownFlag == false)
       {
+        digitalWrite(GLASS_MOTOR_DOWN, HIGH); // stop
         delay(MOTOR_SAFETY_DELAY);
         spin_glass_up();
       }
@@ -579,9 +575,7 @@ void printSettings()
 void cycleStateButtons()
 {
   for (int i = 0; i < sizeof(stateButtons) / sizeof(struct StateButton); i++)
-  {
     state_button_check(&stateButtons[i]);
-  }
 };
 
 void setup()

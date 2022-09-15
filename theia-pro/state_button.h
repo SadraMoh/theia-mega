@@ -12,12 +12,17 @@ struct StateButton
   int reading;
   int last_reading;
   int state;
+  bool disabled;
   unsigned int counter;
   buttonCallback method; // Called
 };
 
 void state_button_check(StateButton *self)
 {
+  // ignore if disabled
+  if (self->disabled)
+    return;
+
   self->reading = digitalRead(self->PIN);
 
   if (self->reading != self->last_reading)
@@ -37,6 +42,8 @@ void state_button_check(StateButton *self)
 
       Serial.print(F("[EVENT] "));
       Serial.print(self->PIN);
+      Serial.print(" ");
+      Serial.print(self->reading);
       Serial.println();
     }
 
