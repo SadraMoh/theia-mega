@@ -51,6 +51,8 @@ const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
 const unsigned long CALIBRATION_DURATION = 180000U;     // 3 minutes
 const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
+// const unsigned long CALIBRATION_DURATION = 4000U;
+// const unsigned long CALIBRATION_ALARM_DURATION = 1000U;
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
@@ -192,18 +194,20 @@ void switch_led_side(StateButton *self)
 
 void switch_mode(StateButton *self)
 {
-  // disable when calibrating
-  if (IsCalibrating)
-    return;
+  // disabled when calibrating
 
   if (self->counter > 7)
     self->counter = AUTO;
 
   IsScanBlinking = self->counter == CALIB;
-  if (IsScanBlinking)
-    scan_blink();
-  else
+  
+  // enabled only in panel
+  if (self->counter == PANEL)
     digitalWrite(SCAN_LED, HIGH);
+  // blinking in calib
+  else if (IsScanBlinking)
+      scan_blink();
+  else digitalWrite(SCAN_LED, LOW);
 
   printSettings();
 }
@@ -262,12 +266,14 @@ void progress_start(char msg[16], unsigned long duration)
 // send scan command according to scan mode
 void send_scan_cmd()
 {
+  const int CMD_DELAY = 800;
+  
   switch (stateButtons[5].counter)
   {
   case RTL:
     Keyboard.press('R');
     Keyboard.release('R');
-    delay(200);
+    delay(CMD_DELAY);
     Keyboard.press('L');
     Keyboard.release('L');
     break;
@@ -275,7 +281,7 @@ void send_scan_cmd()
   case LTR:
     Keyboard.press('L');
     Keyboard.release('L');
-    delay(200);
+    delay(CMD_DELAY);
     Keyboard.press('R');
     Keyboard.release('R');
     break;
@@ -326,6 +332,10 @@ void handle_scan_button(StateButton *self)
       // start calibration
       IsCalibrating = true;
 
+      // disable control panel buttons when calibrating
+      stateButtons[5].disabled = true;
+      stateButtons[6].disabled = true;
+
       // progress
       progress_start("Calibration Mode", CALIBRATION_DURATION);
 
@@ -341,12 +351,20 @@ void handle_scan_button(StateButton *self)
                   waitcall([]()
                             { 
                               // end calibration
+                              
                               digitalWrite(BUZZER, LOW);
 
                               IsScanBlinking = true; 
                               scan_blink();
-                              
+
+                              IsCalibrating = false;
+
+                              // reinable control panel buttons
+                              stateButtons[5].disabled = false;
+                              stateButtons[6].disabled = false;
+
                               spin_glass_up();
+                              printSettings();
                              },
                             CALIBRATION_ALARM_DURATION + 640U); },
                CALIBRATION_DURATION - CALIBRATION_ALARM_DURATION);
@@ -361,6 +379,12 @@ void handle_scan_button(StateButton *self)
 
       IsScanBlinking = true;
       scan_blink();
+
+      IsCalibrating = false;
+
+      // reinable control panel buttons
+      stateButtons[5].disabled = false;
+      stateButtons[6].disabled = false;
 
       spin_glass_up();
       printSettings();
