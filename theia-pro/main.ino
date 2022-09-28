@@ -9,7 +9,7 @@ int platform = UBUNTU;
 #include "Keyboard.h"
 #include <LiquidCrystal_I2C.h>
 
-const LiquidCrystal_I2C lcd(0x27, 16, 4);
+LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 #include "state_button.h"
 #include "queue.h"
@@ -20,10 +20,11 @@ const LiquidCrystal_I2C lcd(0x27, 16, 4);
 #define MOTOR_SAFETY_DELAY 200
 
 // order
-#define RTL 0
-#define LTR 2
-#define R 4
-#define L 6
+#define IN_APP 0
+#define RTL 2
+#define LTR 4
+#define R 6
+#define L 8
 
 // led side
 #define SIDE 0
@@ -173,8 +174,8 @@ void scan_blink()
 
 void switch_ord(StateButton *self)
 {
-  if (self->counter > 7)
-    self->counter = RTL;
+  if (self->counter > 9)
+    self->counter = IN_APP;
 
   printSettings();
 }
@@ -195,14 +196,15 @@ void switch_mode(StateButton *self)
     self->counter = AUTO;
 
   IsScanBlinking = self->counter == CALIB;
-  
+
   // enabled only in panel
   if (self->counter == PANEL)
     digitalWrite(SCAN_LED, HIGH);
   // blinking in calib
   else if (IsScanBlinking)
-      scan_blink();
-  else digitalWrite(SCAN_LED, LOW);
+    scan_blink();
+  else
+    digitalWrite(SCAN_LED, LOW);
 
   printSettings();
 }
@@ -261,11 +263,19 @@ void progress_start(char msg[16], unsigned long duration)
 // send scan command according to scan mode
 void send_scan_cmd()
 {
-  const int CMD_DELAY = 800;
-  
+  const int CMD_DELAY = 1600;
+
   switch (stateButtons[5].counter)
   {
+  case IN_APP:
+    Keyboard.press(' ');
+    Keyboard.release(' ');
+    delay(500);
+    break;
+
   case RTL:
+    Keyboard.press(KEY_LEFT_CTRL);
+    //-
     Keyboard.press('R');
     Keyboard.release('R');
     delay(CMD_DELAY);
@@ -274,6 +284,8 @@ void send_scan_cmd()
     break;
 
   case LTR:
+    Keyboard.press(KEY_LEFT_CTRL);
+    //-
     Keyboard.press('L');
     Keyboard.release('L');
     delay(CMD_DELAY);
@@ -282,15 +294,21 @@ void send_scan_cmd()
     break;
 
   case R:
+    Keyboard.press(KEY_LEFT_CTRL);
+    //-
     Keyboard.press('R');
     Keyboard.release('R');
     break;
 
   case L:
+    Keyboard.press(KEY_LEFT_CTRL);
+    //-
     Keyboard.press('L');
     Keyboard.release('L');
     break;
   }
+
+  Keyboard.releaseAll();
 }
 
 void handle_scan_button(StateButton *self)
@@ -401,7 +419,7 @@ void handle_glass_down_sensor(StateButton *self)
     BottomTouchdownFlag = true;
     delay(200);
     send_scan_cmd();
-    delay(1000);
+    delay(1500);
     BottomTouchdownFlag = false;
 
     spin_glass_up();
@@ -514,18 +532,22 @@ void printSettings()
   {
   case 0:
   case 1:
-    lcd.print(" R to L   ");
+    lcd.print(" In App   ");
     break;
   case 2:
   case 3:
-    lcd.print(" L to R   ");
+    lcd.print(" R to L   ");
     break;
   case 4:
   case 5:
-    lcd.print(" Right*   ");
+    lcd.print(" L to R   ");
     break;
   case 6:
   case 7:
+    lcd.print(" Right*   ");
+    break;
+  case 8:
+  case 9:
     lcd.print(" Left*    ");
     break;
   }
