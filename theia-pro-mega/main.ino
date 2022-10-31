@@ -16,7 +16,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 #define MOTOR_SPEED 120
 
-// to prevent damage to the engine
+// to prevent damage to the engine                        
 #define MOTOR_SAFETY_DELAY 200
 
 // order
@@ -452,6 +452,7 @@ void open_cradle(StateButton *self)
   else
   {
     // push
+    analogWrite(CRADLE_CLOSE_MOTOR, 0);
 
     if (digitalRead(CRADLE_OPEN_SENSOR) == HIGH)
       analogWrite(CRADLE_OPEN_MOTOR, MOTOR_SPEED);
@@ -470,6 +471,7 @@ void close_cradle(StateButton *self)
   else
   {
     // push
+    analogWrite(CRADLE_OPEN_MOTOR, 0);
 
     if (digitalRead(CRADLE_CLOSE_SENSOR) == HIGH)
       analogWrite(CRADLE_CLOSE_MOTOR, MOTOR_SPEED);

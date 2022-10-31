@@ -16,7 +16,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 #define MOTOR_SPEED 120
 
-// to prevent damage to the engine
+// to prevent damage to the engine                        
 #define MOTOR_SAFETY_DELAY 200
 
 // order
