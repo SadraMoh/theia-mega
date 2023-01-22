@@ -1,4 +1,4 @@
-typedef void (*taskCallback)(struct Task *p);
+typedef void (*taskCallback)(void);
 
 struct Task
 {
@@ -11,6 +11,13 @@ const size_t TASK_POOL_SIZE = 16;
 
 static const struct Task *TaskPool[TASK_POOL_SIZE];
 
+void cancel_task(int task_index) {
+
+  free(TaskPool[task_index]);
+  TaskPool[task_index] = NULL;
+
+}
+
 void clear_queue()
 {
   // insert task to the task pool
@@ -22,7 +29,7 @@ void clear_queue()
   }
 }
 
-void waitcall(taskCallback func, unsigned long delay)
+int waitcall(taskCallback func, unsigned long delay)
 {
   struct Task *task = malloc(sizeof(*task));
   task->delay = delay;
@@ -34,10 +41,12 @@ void waitcall(taskCallback func, unsigned long delay)
     if (TaskPool[i] == NULL || TaskPool[i] == nullptr)
     {
       TaskPool[i] = task;
-      return;
+      return i;
     }
 
   Serial.println(F("NO MORE SPACE IN TASK POOL"));
+
+  return 0;
 }
 
 // put this in the loop function
@@ -65,7 +74,7 @@ void doChores()
 
       // Serial.println(F("------------RAN-------------"));
 
-      TaskPool[i]->func(0);
+      TaskPool[i]->func();
 
       free(TaskPool[i]);
       TaskPool[i] = NULL;

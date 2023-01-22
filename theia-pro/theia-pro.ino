@@ -41,6 +41,7 @@ const unsigned short LED_PROJECTOR = 9U;
 const unsigned short LED_PROJECTOR_HIGH = 255;      // lit
 const unsigned short LED_PROJECTOR_LOW = 20;        // dimRL
 const unsigned long LED_PROJECTOR_TIMOUT = 300000U; // 5 minutes
+// const unsigned long LED_PROJECTOR_TIMOUT = 30000U; // half a minute
 
 const unsigned short BUZZER = 4U;
 const unsigned short SCAN_LED = 13U;
@@ -52,8 +53,8 @@ const unsigned short GLASS_MOTOR_DOWN = 5; // (GREEN LED)
 
 const unsigned long CALIBRATION_DURATION = 180000U;     // 3 minutes
 const unsigned long CALIBRATION_ALARM_DURATION = 8000U; // 8 seconds
-// const unsigned long CALIBRATION_DURATION = 4000U;
-// const unsigned long CALIBRATION_ALARM_DURATION = 1000U;
+// const unsigned long CALIBRATION_DURATION = 4000U; // 4 seconds
+// const unsigned long CALIBRATION_ALARM_DURATION = 1000U; // 1 second
 
 bool BottomTouchdownFlag = false; // Used in auto mode, has the pedal touched the bottom sensor.
 bool IsCalibrating = false;       // Is the calibration in action
@@ -263,14 +264,14 @@ void progress_start(char msg[16], unsigned long duration)
 // send scan command according to scan mode
 void send_scan_cmd()
 {
-  const int CMD_DELAY = 1600;
+  const int CMD_DELAY = 2000;
 
   switch (stateButtons[5].counter)
   {
   case IN_APP:
     Keyboard.press(' ');
     Keyboard.release(' ');
-    delay(500);
+    delay(1000);
     break;
 
   case RTL:
@@ -490,11 +491,11 @@ void handle_pedal(StateButton *self)
   }
 }
 
-// projector
+unsigned long projector_idle_time = 0U;
 
+// projector
 void handle_projector(StateButton *self)
 {
-  clear_queue();
 
   if (stateButtons[10].counter % 2 == 0)
   {
@@ -506,10 +507,8 @@ void handle_projector(StateButton *self)
     // push
 
     analogWrite(LED_PROJECTOR, LED_PROJECTOR_HIGH);
+    projector_idle_time = millis();
 
-    waitcall([]()
-             { analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW); },
-             LED_PROJECTOR_TIMOUT);
   }
 }
 
@@ -638,7 +637,10 @@ void loop()
   // lcd.setCursor(0, 0);
   // lcd.print(str);
 
-  doChores();
+  doChores();  
+
+  if (millis() > projector_idle_time + LED_PROJECTOR_TIMOUT)
+      analogWrite(LED_PROJECTOR, LED_PROJECTOR_LOW);
 
   // char str[4];
   // sprintf(str, "%d", digitalRead(A2));
